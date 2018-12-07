@@ -1,4 +1,10 @@
 #include "Game.h"
+#include "TextureManager.h"
+#include "Objects.h"
+#include "InputHandler.h"
+
+//Singleton class
+Game* Game::s_pInstance = 0;
 
 bool Game::init(const char* title, int xpos, int ypos, int width, int height, bool fullscreen)
 {
@@ -8,6 +14,8 @@ bool Game::init(const char* title, int xpos, int ypos, int width, int height, bo
 	{
 		flags = SDL_WINDOW_FULLSCREEN;
 	}
+	
+	//
 
 	//attempt to initialize SDL
 	if (SDL_Init(SDL_INIT_EVERYTHING) == 0)
@@ -24,7 +32,7 @@ bool Game::init(const char* title, int xpos, int ypos, int width, int height, bo
 			if (m_pRenderer != 0) // renderer init success
 			{
 				std::cout << "renderer creation success\n";
-				SDL_SetRenderDrawColor(m_pRenderer, 255, 255, 255, 255);
+				SDL_SetRenderDrawColor(m_pRenderer, 100, 255, 255, 255);
 			}
 			else
 			{
@@ -44,68 +52,40 @@ bool Game::init(const char* title, int xpos, int ypos, int width, int height, bo
 		return false; // SDL init fail
 	}
 
+	TheInputHandler::Instance()->initialiseJoysticks();
+
 	std::cout << "init success\n";
 	m_bRunning = true; //everything inited successfully, start main loop
-
-	/*
-	SDL_Surface* pTempSurface = SDL_LoadBMP("assets/hero.bmp");
-	m_pTexture = SDL_CreateTextureFromSurface(m_pRenderer, pTempSurface);
-	SDL_FreeSurface(pTempSurface);
-	SDL_QueryTexture(m_pTexture, NULL, NULL, 
-		&m_sourceRectangle.w, &m_sourceRectangle.h);
-	*/
-
-	SDL_Surface* pTempSurface = IMG_Load("assets/flash.png");
-	m_pTexture = SDL_CreateTextureFromSurface(m_pRenderer, pTempSurface);
-	m_sourceRectangle.w = 100;
-	m_sourceRectangle.h = 100;
-	SDL_Point screen_center = {
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED
-	};
-
-	//m_destinationRectangle.x = m_sourceRectangle.x = 0;
-	//m_destinationRectangle.y = m_sourceRectangle.y = 0;
-	//m_sourceRectangle.x = 50;
-	//m_sourceRectangle.y = 50;
-	m_destinationRectangle.x = 100;
-	m_destinationRectangle.y = 100;
-
-	m_destinationRectangle.w = m_sourceRectangle.w;
-	m_destinationRectangle.h = m_sourceRectangle.h;
-
+	if (   !TextureManager::Instance()->load("assets/flash.png", "flash", m_pRenderer) 
+		|| !TextureManager::Instance()->load("assets/pikachu.png", "pikachu", m_pRenderer)
+		|| !TextureManager::Instance()->load("assets/hero.png", "hero", m_pRenderer) )
+	{
+		return false;
+	}
+	
+	m_gameObjects.push_back(new Player(new LoaderParams(100, 100, 100, 203, "hero")));
+	m_gameObjects.push_back(new Enemy(new LoaderParams(0, 0, 100, 66, "pikachu")));
+	m_gameObjects.push_back(new Enemy(new LoaderParams(0, 100, 100, 100, "flash")));
+	
 	return true;
 }
 
 void Game::render()
 {
-	m_destinationRectangle.x = 100;
-	m_destinationRectangle.y = 100;
-	SDL_RenderClear(m_pRenderer); //clear the renderer to the draw color
-	SDL_RenderCopyEx(m_pRenderer, m_pTexture, &m_sourceRectangle, &m_destinationRectangle,
-		int((SDL_GetTicks() / 10) % 360), 0, SDL_FLIP_HORIZONTAL); 
-	
-	m_destinationRectangle.x = 200;
-	m_destinationRectangle.y = 250;
-	SDL_RenderCopyEx(m_pRenderer, m_pTexture, &m_sourceRectangle, &m_destinationRectangle,
-		int((SDL_GetTicks() / 20) % 360), 0, SDL_FLIP_NONE);
-	
-	m_destinationRectangle.x = 400;
-	m_destinationRectangle.y = 350;
-	SDL_RenderCopyEx(m_pRenderer, m_pTexture, &m_sourceRectangle, &m_destinationRectangle,
-		int((SDL_GetTicks() / 5) % 360), 0, SDL_FLIP_VERTICAL);
-	
-	m_destinationRectangle.x = 350;
-	m_destinationRectangle.y = 180; 
-	SDL_RenderCopyEx(m_pRenderer, m_pTexture, &m_sourceRectangle, &m_destinationRectangle,
-		int((SDL_GetTicks() / 40) % 360), &screen_center , SDL_FLIP_NONE);
+	SDL_RenderClear(m_pRenderer); //clear to the draw color
 
-	SDL_RenderPresent(m_pRenderer); //draw to the screen
+	//loop through our objects and draw them
+	for (std::vector< GameObject* >::size_type i = 0; i != m_gameObjects.size(); i++)
+	{
+		m_gameObjects[i]->draw();
+	}
+	SDL_RenderPresent(m_pRenderer);
 }
 
 void Game::clean()
 {
 	std::cout << "cleaning game\n";
+	TheInputHandler::Instance()->clean();
 	SDL_DestroyWindow(m_pWindow);
 	SDL_DestroyRenderer(m_pRenderer);
 	SDL_Quit();
@@ -113,22 +93,15 @@ void Game::clean()
 
 void Game::handleEvents()
 {
-	SDL_Event event;
-	if (SDL_PollEvent(&event))
-	{
-		switch (event.type)
-		{
-		case SDL_QUIT:
-			m_bRunning = false;
-		break;
-
-		default:
-		break;
-		}
-	}
+	TheInputHandler::Instance()->update();
 }
 
 void Game::update() 
 {
-	m_sourceRectangle.x = 100 * int(((SDL_GetTicks() / 100) % 5));
+	for (std::vector< GameObject* >::size_type i = 0; i != m_gameObjects.size(); i++)
+	{
+		m_gameObjects[i]->update();
+	}
 }
+
+
